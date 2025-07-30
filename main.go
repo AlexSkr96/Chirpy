@@ -12,23 +12,24 @@ type apiConfig struct {
 
 func main() {
 	apiConfig := apiConfig{}
+	apiConfig.fileserverHits.Store(0)
 
 	serveMux := http.NewServeMux()
-	serveMux.Handle("/app/", apiConfig.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir("."))))())
+	serveMux.Handle("/app/", apiConfig.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	okFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	serveMux.Handle("/healthz/", okFunc)
+	serveMux.Handle("GET /healthz", okFunc)
 
 	metricsFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(fmt.Sprintf("Hits: %v", apiConfig.fileserverHits.Load())))
 	})
-	serveMux.Handle("/metrics/", metricsFunc)
+	serveMux.Handle("GET /metrics", metricsFunc)
 
 	resetFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiConfig.fileserverHits.Store(0)
@@ -37,7 +38,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	serveMux.Handle("/reset/", resetFunc)
+	serveMux.Handle("POST /reset", resetFunc)
 
 	server := &http.Server{
 		Handler: serveMux,
@@ -53,7 +54,7 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	cfg.fileserverHits.Add(1)
-	return next
-}
+// func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
+// 	cfg.fileserverHits.Add(1)
+// 	return next
+// }
