@@ -22,14 +22,25 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	serveMux.Handle("GET /healthz", okFunc)
+	serveMux.Handle("GET /api/healthz", okFunc)
+
+	serveMux.Handle("POST /api/validate_chirp", validateChirpFunc)
 
 	metricsFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf("Hits: %v", apiConfig.fileserverHits.Load())))
+		w.Write([]byte(fmt.Sprintf(`
+			<html>
+				<body>
+    				<h1>Welcome, Chirpy Admin</h1>
+        			<p>Chirpy has been visited %d times!</p>
+           		</body>
+            </html>`,
+			// "Hits: %v",
+			apiConfig.fileserverHits.Load()),
+		))
 	})
-	serveMux.Handle("GET /metrics", metricsFunc)
+	serveMux.Handle("GET /admin/metrics", metricsFunc)
 
 	resetFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		apiConfig.fileserverHits.Store(0)
@@ -38,7 +49,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
-	serveMux.Handle("POST /reset", resetFunc)
+	serveMux.Handle("POST /admin/reset", resetFunc)
 
 	server := &http.Server{
 		Handler: serveMux,
@@ -54,7 +65,9 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-// func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-// 	cfg.fileserverHits.Add(1)
-// 	return next
-// }
+func validateChirpFunc(w http.ResponseWriter, r *http.Request) {
+
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("Chirp validated"))
+}
