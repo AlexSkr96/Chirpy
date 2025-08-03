@@ -1,21 +1,41 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
+	"os"
 	"sync/atomic"
+
+	"github.com/AlexSkr96/Chirpy/internal/database"
+	"github.com/joho/godotenv"
+
+	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
+	DB             *database.Queries
 }
 
+var cfg = apiConfig{}
+
 func main() {
-	apiConfig := apiConfig{}
-	apiConfig.fileserverHits.Store(0)
+	godotenv.Load()
+
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	cfg.fileserverHits.Store(0)
+	cfg.DB = database.New(db)
 
 	serveMux := http.NewServeMux()
-	serveMux.Handle("/app/", apiConfig.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
+	serveMux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
 
 	okFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
@@ -23,8 +43,8 @@ func main() {
 		w.Write([]byte("OK"))
 	})
 	serveMux.Handle("GET /api/healthz", okFunc)
-
-	serveMux.Handle("POST /api/validate_chirp", validateChirpFunc)
+	serveMux.Handle("POST /api/users", http.HandlerFunc(createUserHandler))
+	serveMux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirpHandler))
 
 	metricsFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -37,19 +57,12 @@ func main() {
            		</body>
             </html>`,
 			// "Hits: %v",
-			apiConfig.fileserverHits.Load()),
+			cfg.fileserverHits.Load()),
 		))
 	})
 	serveMux.Handle("GET /admin/metrics", metricsFunc)
 
-	resetFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		apiConfig.fileserverHits.Store(0)
-
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	serveMux.Handle("POST /admin/reset", resetFunc)
+	serveMux.Handle("POST /admin/reset", http.HandlerFunc(resetHandler))
 
 	server := &http.Server{
 		Handler: serveMux,
@@ -63,11 +76,4 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 		cfg.fileserverHits.Add(1)
 		next.ServeHTTP(w, r)
 	})
-}
-
-func validateChirpFunc(w http.ResponseWriter, r *http.Request) {
-
-	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte("Chirp validated"))
 }
