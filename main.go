@@ -2,7 +2,6 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -10,70 +9,61 @@ import (
 
 	"github.com/AlexSkr96/Chirpy/internal/database"
 	"github.com/joho/godotenv"
-
 	_ "github.com/lib/pq"
 )
 
 type apiConfig struct {
 	fileserverHits atomic.Int32
-	DB             *database.Queries
+	db             *database.Queries
+	platform       string
 }
-
-var cfg = apiConfig{}
 
 func main() {
+	const filepathRoot = "."
+	const port = "8080"
+
 	godotenv.Load()
-
 	dbURL := os.Getenv("DB_URL")
-	db, err := sql.Open("postgres", dbURL)
+	if dbURL == "" {
+		log.Fatal("DB_URL must be set")
+	}
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		log.Fatal("PLATFORM must be set")
+	}
+
+	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error opening database: %s", err)
 	}
-	defer db.Close()
+	dbQueries := database.New(dbConn)
 
-	cfg.fileserverHits.Store(0)
-	cfg.DB = database.New(db)
-
-	serveMux := http.NewServeMux()
-	serveMux.Handle("/app/", cfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(".")))))
-
-	okFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
-	serveMux.Handle("GET /api/healthz", okFunc)
-	serveMux.Handle("POST /api/users", http.HandlerFunc(createUserHandler))
-	serveMux.Handle("POST /api/validate_chirp", http.HandlerFunc(validateChirpHandler))
-
-	metricsFunc := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(fmt.Sprintf(`
-			<html>
-				<body>
-    				<h1>Welcome, Chirpy Admin</h1>
-        			<p>Chirpy has been visited %d times!</p>
-           		</body>
-            </html>`,
-			// "Hits: %v",
-			cfg.fileserverHits.Load()),
-		))
-	})
-	serveMux.Handle("GET /admin/metrics", metricsFunc)
-
-	serveMux.Handle("POST /admin/reset", http.HandlerFunc(resetHandler))
-
-	server := &http.Server{
-		Handler: serveMux,
-		Addr:    ":8080",
+	apiCfg := apiConfig{
+		fileserverHits: atomic.Int32{},
+		db:             dbQueries,
+		platform:       platform,
 	}
-	server.ListenAndServe()
-}
 
-func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		cfg.fileserverHits.Add(1)
-		next.ServeHTTP(w, r)
-	})
+	mux := http.NewServeMux()
+	fsHandler := apiCfg.middlewareMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(filepathRoot))))
+	mux.Handle("/app/", fsHandler)
+
+	mux.HandleFunc("GET /api/healthz", handlerReadiness)
+
+	mux.HandleFunc("POST /api/users", apiCfg.handlerUsersCreate)
+
+	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerChirpsGet)
+
+	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.handlerMetrics)
+
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: mux,
+	}
+
+	log.Printf("Serving on port: %s\n", port)
+	log.Fatal(srv.ListenAndServe())
 }
