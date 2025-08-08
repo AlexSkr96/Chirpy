@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/AlexSkr96/Chirpy/internal/auth"
+	"github.com/AlexSkr96/Chirpy/internal/database"
 )
 
 func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
@@ -40,23 +40,26 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tokenExpirationInSecond := params.ExpiresInSeconds
-	if tokenExpirationInSecond <= 0 || tokenExpirationInSecond > 3600 {
-		tokenExpirationInSecond = 3600
+	token, err := auth.MakeJWT(user.ID, cfg.secret)
+
+	refreshToken, err := auth.MakeRefreshToken()
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
+		return
 	}
-	token, err := auth.MakeJWT(
-		user.ID,
-		cfg.secret,
-		time.Duration(tokenExpirationInSecond)*time.Second,
-	)
+	cfg.db.SaveRefreshToken(context.Background(), database.SaveRefreshTokenParams{
+		UserID: user.ID,
+		Token:  refreshToken,
+	})
 
 	respondWithJSON(w, http.StatusOK, response{
 		User: User{
-			ID:        user.ID,
-			Email:     user.Email,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Token:     token,
+			ID:           user.ID,
+			Email:        user.Email,
+			CreatedAt:    user.CreatedAt,
+			UpdatedAt:    user.UpdatedAt,
+			Token:        token,
+			RefreshToken: refreshToken,
 		},
 	})
 }

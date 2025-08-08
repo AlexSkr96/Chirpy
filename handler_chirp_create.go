@@ -34,6 +34,10 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 	}
 
 	userID, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Couldn't validate auth token", err)
+		return
+	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
