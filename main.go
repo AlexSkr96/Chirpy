@@ -17,6 +17,7 @@ type apiConfig struct {
 	db             *database.Queries
 	platform       string
 	secret         string
+	polkaKey       string
 }
 
 func main() {
@@ -36,6 +37,10 @@ func main() {
 	if secret == "" {
 		log.Fatal("SECRET must be set")
 	}
+	polkaKey := os.Getenv("POLKA_KEY")
+	if polkaKey == "" {
+		log.Fatal("POLKA_KEY must be set")
+	}
 
 	dbConn, err := sql.Open("postgres", dbURL)
 	if err != nil {
@@ -48,6 +53,7 @@ func main() {
 		db:             dbQueries,
 		platform:       platform,
 		secret:         secret,
+		polkaKey:       polkaKey,
 	}
 
 	mux := http.NewServeMux()
@@ -61,10 +67,11 @@ func main() {
 	mux.HandleFunc("POST /api/login", apiCfg.handlerLogin)
 	mux.HandleFunc("POST /api/refresh", apiCfg.handlerVerifyRefreshToken)
 	mux.HandleFunc("POST /api/revoke", apiCfg.handlerRevokeRefreshToken)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.handlerUserChirpyRedUpgrade)
 
 	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
-	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
-	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerChirpsGet)
+	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsGet)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.handlerChirpsGetByID)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.handlerChirpsDelete)
 
 	mux.HandleFunc("POST /admin/reset", apiCfg.handlerReset)

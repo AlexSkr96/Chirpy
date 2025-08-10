@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"time"
@@ -20,7 +19,7 @@ func (cfg *apiConfig) handlerVerifyRefreshToken(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	refreshToken, err := cfg.db.GetRefreshToken(context.Background(), token)
+	refreshToken, err := cfg.db.GetRefreshToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, "Invalid refresh token", http.StatusUnauthorized)
 		return
@@ -52,7 +51,7 @@ func (cfg *apiConfig) handlerRevokeRefreshToken(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	err = cfg.db.RevokeRefreshToken(context.Background(), token)
+	err = cfg.db.RevokeRefreshToken(r.Context(), token)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Failed to revoke refresh token: %v", err), http.StatusInternalServerError)
 		return

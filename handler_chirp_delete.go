@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -18,7 +17,7 @@ func (cfg *apiConfig) handlerChirpsDelete(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	chirp, err := cfg.db.GetChirpByID(context.Background(), chirpID)
+	chirp, err := cfg.db.GetChirpByID(r.Context(), chirpID)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Error getting chirp: %v", err.Error()), http.StatusInternalServerError)
 		return
@@ -37,7 +36,7 @@ func (cfg *apiConfig) handlerChirpsDelete(w http.ResponseWriter, r *http.Request
 	}
 
 	if chirp.UserID == userID {
-		err = cfg.db.DeleteChirpByID(context.Background(), chirpID)
+		err = cfg.db.DeleteChirpByID(r.Context(), chirpID)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("Error deleting chirp: %v", err.Error()), 404)
 			return

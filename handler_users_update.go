@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -45,7 +44,7 @@ func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := cfg.db.UpdateUserPasswordAndEmail(context.Background(), database.UpdateUserPasswordAndEmailParams{
+	user, err := cfg.db.UpdateUserPasswordAndEmail(r.Context(), database.UpdateUserPasswordAndEmailParams{
 		Email:          params.Email,
 		HashedPassword: hashedPassword,
 		ID:             userID,
@@ -53,10 +52,11 @@ func (cfg *apiConfig) handlerUpdateUser(w http.ResponseWriter, r *http.Request) 
 
 	respondWithJSON(w, 200, response{
 		User: User{
-			ID:        user.ID,
-			CreatedAt: user.CreatedAt,
-			UpdatedAt: user.UpdatedAt,
-			Email:     user.Email,
+			ID:          user.ID,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			Email:       user.Email,
+			IsChirpyRed: user.IsChirpyRed,
 		},
 	})
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -28,7 +27,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := cfg.db.GetUserByEmail(context.Background(), params.Email)
+	user, err := cfg.db.GetUserByEmail(r.Context(), params.Email)
 	if err != nil {
 		respondWithError(w, http.StatusNotFound, fmt.Sprintf("No user with email %v", params.Email), err)
 		return
@@ -47,7 +46,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create refresh token", err)
 		return
 	}
-	cfg.db.SaveRefreshToken(context.Background(), database.SaveRefreshTokenParams{
+	cfg.db.SaveRefreshToken(r.Context(), database.SaveRefreshTokenParams{
 		UserID: user.ID,
 		Token:  refreshToken,
 	})
@@ -60,6 +59,7 @@ func (cfg *apiConfig) handlerLogin(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt:    user.UpdatedAt,
 			Token:        token,
 			RefreshToken: refreshToken,
+			IsChirpyRed:  user.IsChirpyRed,
 		},
 	})
 }
